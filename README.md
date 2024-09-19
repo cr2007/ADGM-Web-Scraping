@@ -17,7 +17,7 @@ git clone https://github.com/cr2007/adgm-web-scraping
 cd adgm-web-scraping
 ```
 
-Optionally, you can also download the repository as a ZIP file.
+Optionally, you can also [**download**](https://github.com/cr2007/ADGM-Web-Scraping/archive/refs/heads/master.zip) the repository as a ZIP file.
 
 ## Create and activate a virtual environment
 
