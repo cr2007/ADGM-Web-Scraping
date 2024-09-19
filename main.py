@@ -91,6 +91,12 @@ def format_company_name(company_name: str) -> str:
 
 def create_session() -> requests.Session:
     session = requests.Session()
+
+    session.headers = {
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/jxl,image/webp,image/png,image/svg+xml,*/*;q=0.8",
+    }
+
     retries = Retry(total=5, backoff_factor=0.1, status_forcelist=[500, 502, 503, 504])
     adapter = HTTPAdapter(max_retries=retries)
     session.mount("https://", adapter)
@@ -175,13 +181,8 @@ def fetch_company_data(session: requests.Session, company: str):
         f"https://www.adgm.com/public-registers/fsra/fsf/{format_company_name(company)}"
     )
 
-    headers = {
-        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/jxl,image/webp,image/png,image/svg+xml,*/*;q=0.8",
-    }
-
     try:
-        response = session.get(url, headers=headers, timeout=10)
+        response = session.get(url, timeout=10)
         if response.status_code == 404:
             print(
                 f"There is a problem with the URL for {company}."
@@ -217,7 +218,7 @@ def fetch_company_data(session: requests.Session, company: str):
                 headers={
                     "Title": f"Error fetching data for {company}",
                     "Priority": "urgent",
-                    "Tags": "warning,adgm-register,error",
+                    "Tags": "warning,adgm,fsra-register,error",
                 },
             )
         else:
