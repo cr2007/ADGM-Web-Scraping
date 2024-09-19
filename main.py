@@ -1,7 +1,9 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
 import re
+import signal
 import sys
+import threading
 import time
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
@@ -35,7 +37,7 @@ def format_company_name(company_name: str) -> str:
     # Handle special cases using the dictionary
     if company_name in COMPANY_NAME_SPECIAL_CASES:
         return COMPANY_NAME_SPECIAL_CASES[company_name]
-    
+
     # General case formatting
 
     # Convert to lowercase
@@ -49,9 +51,9 @@ def format_company_name(company_name: str) -> str:
 
     # Replace multiple spaces or hyphens with a single hyphen
     company_name = re.sub(r"[\s-]+", "-", company_name)
-    
+
     # Remove trailing hyphens
-    company_name = company_name.rstrip("-")  
+    company_name = company_name.rstrip("-")
 
     return company_name
 
@@ -217,46 +219,80 @@ def fetch_company_data(session: requests.Session, company: str) -> dict[str, str
 
 
 def main(company_names: list[str], output_file: str) -> None:
-    try:
-        session = create_session()
-        df = pd.DataFrame()
+    session = create_session()
+    df = pd.DataFrame()
+    executor = ThreadPoolExecutor(max_workers=10)
+    shutdown_event = threading.Event()
 
+    def signal_handler(signum, frame):
+        print("\nCtrl+C pressed. Shutting down gracefully...")
+        shutdown_event.set()
+        executor.shutdown(wait=False, cancel_futures=True)
+
+    signal.signal(signal.SIGINT, signal_handler)
+
+    try:
         print("Starting data extraction...")
         start_time = time.time()
 
-        with ThreadPoolExecutor(max_workers=10) as executor:
-            future_to_company = {
-                executor.submit(fetch_company_data, session, company): company
-                for company in company_names
-            }
-            for future in as_completed(future_to_company):
+        future_to_company = {}
+        for company in company_names:
+            if shutdown_event.is_set():
+                break
+            future = executor.submit(fetch_company_data, session, company)
+            future_to_company[future] = company
+
+        for future in as_completed(future_to_company):
+            if shutdown_event.is_set():
+                break
+
+            company_data = future.result()
+            try:
                 company_data = future.result()
                 if company_data:
-                    df = pd.concat(
-                        [df, pd.DataFrame([company_data])], ignore_index=True
-                    )
+                    df = pd.concat([df, pd.DataFrame([company_data])], ignore_index=True)
+            except Exception as exc:
+                print(f"{company} generated an exception: {exc}")
 
-        df.to_csv(output_file, index=False)
+        if not shutdown_event.is_set():
+            df.to_csv(output_file, index=False)
 
-        total_time = time.time() - start_time
-        minutes, seconds = divmod(total_time, 60)
+            total_time = time.time() - start_time
+            minutes, seconds = divmod(total_time, 60)
 
-        print(f"Data extraction completed in {int(minutes)} min {seconds:.2f} sec")
+            print(f"Data extraction completed in {int(minutes)} min {seconds:.2f} sec")
 
-        if ntfy_url:
-            requests.post(
-                ntfy_url,
-                data=f"Job completed in {int(minutes)} minutes {seconds:.2f} seconds.",
-                headers={
-                    "Title": "ADGM Register data extraction successful",
-                    "Priority": "4",
-                    "Tags": "white_check_mark,muscle,adgm-register",
-                },
-            )
+            if ntfy_url:
+                requests.post(
+                    ntfy_url,
+                    data=f"Job completed in {int(minutes)} minutes {seconds:.2f} seconds.",
+                    headers={
+                        "Title": "ADGM Register data extraction successful",
+                        "Priority": "4",
+                        "Tags": "white_check_mark,muscle,adgm-register",
+                    },
+                )
+            else:
+                print("NTFY_URL not configured in environment variables. Include a URL to get notifications.\nMore Info: https://ntfy.sh")
         else:
-            print(
-                "NTFY_URL not configured in environment variables. Include a URL to get notifications.\nMore Info: https://ntfy.sh"
-            )
+            print("Data extraction was interrupted. Saving partial results...")
+
+            df.to_csv(f"partial_{output_file}", index=False)
+
+            print(f"Partial results saved to partial_{output_file}")
+
+            if ntfy_url:
+                requests.post(
+                    ntfy_url,
+                    data=f"Job was interrupted. Partial results saved to partial_{output_file}",
+                    headers={
+                        "Title": "ADGM Register data extraction interrupted",
+                        "Priority": "3",
+                        "Tags": "negative_squared_cross_mark,adgm-register,ctrl-c,interrupted",
+                    },
+                )
+            else:
+                print("NTFY_URL not configured in environment variables. Include a URL to get notifications.\nMore Info: https://ntfy.sh")
     except Exception as e:
         if ntfy_url:
             requests.post(
@@ -274,6 +310,9 @@ def main(company_names: list[str], output_file: str) -> None:
             )
 
         raise e
+    finally:
+        executor.shutdown(wait=True)
+        print("All tasks have been completed or cancelled.")
 
 
 if __name__ == "__main__":
