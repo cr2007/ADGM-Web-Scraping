@@ -197,7 +197,7 @@ def fetch_company_data(session: requests.Session, company: str):
                         "Title": f"Incorrect link for {company}.\n\nCheck if the link ending is correct by any chance.",
                         "Priority": "urgent",
                         "Tags": "warning,adgm, fsra-register,incorrect-link,404-Error",
-                        "Actions": "view, Go to FSRA Public Register, https://www.adgm.com/public-registers/fsra"
+                        "Actions": "view, Go to FSRA Public Register, https://www.adgm.com/public-registers/fsra",
                     },
                 )
             else:
@@ -272,13 +272,14 @@ def main(company_names: list[str], output_file: str):
         df.to_csv(output_file, index=False)
 
         total_time = time.time() - start_time
+        minutes, seconds = divmod(total_time, 60)
 
-        print(f"Data extraction completed in {total_time:.2f} minutes")
+        print(f"Data extraction completed in {int(minutes)} min {seconds:.2f} sec")
 
         if ntfy_url:
             requests.post(
                 ntfy_url,
-                data=f"Good luck and good night\n\nNeed time worth of {total_time:.2f} minutes",
+                data=f"Job completed in {int(minutes)} minutes {seconds:.2f} seconds.",
                 headers={
                     "Title": "ADGM Register data extraction successful",
                     "Priority": "4",
