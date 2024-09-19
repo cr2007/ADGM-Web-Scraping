@@ -5,6 +5,7 @@ import signal
 import sys
 import threading
 import time
+from typing import Optional
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 import pandas as pd
@@ -31,6 +32,19 @@ COMPANY_NAME_SPECIAL_CASES = {
     "Shorooq Partners Ltd": "shorooq-vc-partners-ltd",
     "UniCredit S.p.A.": "unicredit-spa",
 }
+
+
+def send_ntfy_notification(message: str, headers: Optional[dict[str, str]]) -> None:
+    if ntfy_url:
+        requests.post(
+            ntfy_url,
+            data=message,
+            headers=headers,
+        )
+    else:
+        print(
+            "NTFY_URL not configured in environment variables. Include a URL to get notifications.\nMore Info: https://ntfy.sh"
+        )
 
 
 def format_company_name(company_name: str) -> str:
@@ -82,7 +96,9 @@ def get_regulated_activities(soup: BeautifulSoup) -> list[dict[str, str]]:
 
     elements: BeautifulSoup = regulated_activities.find_all("div", class_="opn-accord")
     for element in elements:
-        text = element.get_text().strip().split("\n") # Strip and split based on new lines
+        text = (
+            element.get_text().strip().split("\n")
+        )  # Strip and split based on new lines
 
         # Filter out any empty or whitespace strings from the list
         text = [item.strip() for item in text if item.strip()]
@@ -142,7 +158,9 @@ def fetch_company_data(session: requests.Session, company: str) -> dict[str, str
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/jxl,image/webp,image/png,image/svg+xml,*/*;q=0.8",
     }
 
-    url = (f"https://www.adgm.com/public-registers/fsra/fsf/{format_company_name(company)}")
+    url = (
+        f"https://www.adgm.com/public-registers/fsra/fsf/{format_company_name(company)}"
+    )
 
     try:
         response = session.get(url, headers=headers, timeout=10)
@@ -152,19 +170,15 @@ def fetch_company_data(session: requests.Session, company: str) -> dict[str, str
                 f"\n{format_company_name(company)} does not seem to be the correct URL for this company."
             )
 
-            if ntfy_url:
-                requests.post(
-                    ntfy_url,
-                    data=f"Got {response.status_code} for {company}",
-                    headers={
-                        "Title": f"Incorrect link for {company}.\n\nCheck if the link ending is correct by any chance.",
-                        "Priority": "urgent",
-                        "Tags": "warning,adgm, fsra-register,incorrect-link,404-Error",
-                        "Actions": "view, Go to FSRA Public Register, https://www.adgm.com/public-registers/fsra",
-                    },
-                )
-            else:
-                print("NTFY_URL not configured in environment variables. Include a URL to get notifications.\nMore Info: https://ntfy.sh")
+            send_ntfy_notification(
+                message=f"Got {response.status_code} for {company}",
+                headers={
+                    "Title": f"Incorrect link for {company}.\n\nCheck if the link ending is correct by any chance.",
+                    "Priority": "urgent",
+                    "Tags": "warning,adgm, fsra-register,incorrect-link,404-Error",
+                    "Actions": "view, Go to FSRA Public Register, https://www.adgm.com/public-registers/fsra",
+                },
+            )
 
             return {"Company": company}
 
@@ -172,20 +186,14 @@ def fetch_company_data(session: requests.Session, company: str) -> dict[str, str
     except requests.exceptions.RequestException as e:
         print(f"Error fetching data for {company}: {e}")
 
-        if ntfy_url:
-            requests.post(
-                ntfy_url,
-                data=f"Error fetching data for {company}: {e}",
-                headers={
-                    "Title": f"Error fetching data for {company}",
-                    "Priority": "urgent",
-                    "Tags": "warning,adgm,fsra-register,error",
-                },
-            )
-        else:
-            print(
-                "NTFY_URL not configured in environment variables. Include a URL to get notifications.\nMore Info: https://ntfy.sh"
-            )
+        send_ntfy_notification(
+            f"Error fetching data for {company}: {e}",
+            headers={
+                "Title": f"Error fetching data for {company}",
+                "Priority": "urgent",
+                "Tags": "warning,adgm,fsra-register,error",
+            },
+        )
 
         return {"Company": company}
 
@@ -242,7 +250,9 @@ def main(company_names: list[str], output_file: str) -> None:
             try:
                 company_data = future.result()
                 if company_data:
-                    df = pd.concat([df, pd.DataFrame([company_data])], ignore_index=True)
+                    df = pd.concat(
+                        [df, pd.DataFrame([company_data])], ignore_index=True
+                    )
             except Exception as exc:
                 print(f"{company} generated an exception: {exc}")
 
@@ -254,18 +264,14 @@ def main(company_names: list[str], output_file: str) -> None:
 
             print(f"Data extraction completed in {int(minutes)} min {seconds:.2f} sec")
 
-            if ntfy_url:
-                requests.post(
-                    ntfy_url,
-                    data=f"Job completed in {int(minutes)} minutes {seconds:.2f} seconds.",
-                    headers={
-                        "Title": "ADGM Register data extraction successful",
-                        "Priority": "4",
-                        "Tags": "white_check_mark,muscle,adgm-register",
-                    },
-                )
-            else:
-                print("NTFY_URL not configured in environment variables. Include a URL to get notifications.\nMore Info: https://ntfy.sh")
+            send_ntfy_notification(
+                message=f"Job completed in {int(minutes)} minutes {seconds:.2f} seconds.",
+                headers={
+                    "Title": "ADGM Register data extraction successful",
+                    "Priority": "4",
+                    "Tags": "white_check_mark,muscle,adgm-register",
+                },
+            )
         else:
             print("Data extraction was interrupted. Saving partial results...")
 
@@ -273,33 +279,25 @@ def main(company_names: list[str], output_file: str) -> None:
 
             print(f"Partial results saved to partial_{output_file}")
 
-            if ntfy_url:
-                requests.post(
-                    ntfy_url,
-                    data=f"Job was interrupted. Partial results saved to partial_{output_file}",
-                    headers={
-                        "Title": "ADGM Register data extraction interrupted",
-                        "Priority": "3",
-                        "Tags": "negative_squared_cross_mark,adgm-register,ctrl-c,interrupted",
-                    },
-                )
-            else:
-                print("NTFY_URL not configured in environment variables. Include a URL to get notifications.\nMore Info: https://ntfy.sh")
+            send_ntfy_notification(
+                message=f"Job was interrupted. Partial results saved to partial_{output_file}",
+                headers={
+                    "Title": "ADGM Register data extraction interrupted",
+                    "Priority": "3",
+                    "Tags": "negative_squared_cross_mark,adgm-register,ctrl-c,interrupted",
+                },
+            )
     except Exception as e:
         df.to_csv(f"partial_{output_file}", index=False)
 
-        if ntfy_url:
-            requests.post(
-                ntfy_url,
-                data=f"App crashed\nPartial results saved to partial_{output_file}\n\nAn error occurred during data extraction:\n {e}",
-                headers={
-                    "Title": "ADGM Register data extraction failed",
-                    "Priority": "5",
-                    "Tags": "warning,adgm-register,error",
-                },
-            )
-        else:
-            print("NTFY_URL not configured in environment variables. Include a URL to get notifications.\nMore Info: https://ntfy.sh")
+        send_ntfy_notification(
+            message=f"App crashed\nPartial results saved to partial_{output_file}\n\nAn error occurred during data extraction:\n {e}",
+            headers={
+                "Title": "ADGM Register data extraction failed",
+                "Priority": "5",
+                "Tags": "warning,adgm-register,error",
+            },
+        )
 
         raise e
     finally:
@@ -314,7 +312,9 @@ if __name__ == "__main__":
                 # List comprehension to read and strip each line
                 company_names = [line.strip() for line in file]
         else:
-            print("File path not specified. Please specify it in the '.env' file with the variable 'COMPANY_NAMES_FILE_PATH'")
+            print(
+                "File path not specified. Please specify it in the '.env' file with the variable 'COMPANY_NAMES_FILE_PATH'"
+            )
             sys.exit()
     except FileNotFoundError:
         print(f"The file at {file_path} was not found.")
