@@ -75,13 +75,13 @@ def create_session() -> requests.Session:
     return session
 
 
-def is_date(string):
+def is_date(string) -> bool:
     """Check if a string looks like a date in a common format."""
     date_pattern = r"\d{1,2} \w+ \d{4}"
     return re.match(date_pattern, string) is not None
 
 
-def get_regulated_activities(soup: BeautifulSoup):
+def get_regulated_activities(soup: BeautifulSoup) -> list[dict[str, str]]:
     regulated_activities: BeautifulSoup = soup.find(id="raTableContainer_fsfdetail")
 
     ra_list = []
@@ -144,7 +144,7 @@ def get_conditions(soup: BeautifulSoup) -> str:
     return conditions_list[1]
 
 
-def fetch_company_data(session: requests.Session, company: str):
+def fetch_company_data(session: requests.Session, company: str) -> dict[str, str]:
     loop_start_time = time.time()
 
     url = (
@@ -219,7 +219,7 @@ def fetch_company_data(session: requests.Session, company: str):
     return company_data
 
 
-def main(company_names: list[str], output_file: str):
+def main(company_names: list[str], output_file: str) -> None:
     try:
         session = create_session()
         df = pd.DataFrame()
