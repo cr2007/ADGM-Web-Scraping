@@ -193,9 +193,10 @@ def fetch_company_data(session: requests.Session, company: str):
                     ntfy_url,
                     data=f"Got {response.status_code} for {company}",
                     headers={
-                        "Title": f"Incorrect link for {company}",
+                        "Title": f"Incorrect link for {company}.\n\nCheck if the link ending is correct by any chance.",
                         "Priority": "urgent",
-                        "Tags": "warning,adgm-register,incorrect-link,404-Error",
+                        "Tags": "warning,adgm, fsra-register,incorrect-link,404-Error",
+                        "Actions": "view, Go to FSRA Public Register, https://www.adgm.com/public-registers/fsra"
                     },
                 )
             else:
