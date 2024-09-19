@@ -15,78 +15,48 @@ load_dotenv()
 
 ntfy_url = os.getenv("NTFY_URL")
 
+COMPANY_NAME_SPECIAL_CASES = {
+    "Abrdn Investments Middle East Limited": "aberdeen-asset-middle-east-limited",
+    "Xanara ME LTD": "xanara-management-limited",
+    "SS&C Financial Services Middle East Limited": "ssandc-financial-services-middle-east-limited",
+    "Perella Weinberg Partners UK LLP - branch": "perella-weinberg-partners-uk-llp",
+    "Mubadala (Re)insurance Limited": "mubadala-re-insurance-limited",
+    "Bitmena Limited": "venomex-limited",
+    "Bank Lombard Odier & Co. Limited": "bank-lombard-odier--co-limited",
+    "AT Capital Markets Limited (Withdrawn)": "at-capital-markets-limited",
+    "Worldwide Cash Express Limited": "worldwide-cash-express",
+    "BNP Paribas S.A.": "bnp-paribas-sa",
+    "Shorooq Partners Ltd": "shorooq-vc-partners-ltd",
+    "UniCredit S.p.A.": "unicredit-spa",
+}
+
 
 def format_company_name(company_name: str) -> str:
-    if company_name not in [
-        "Abrdn Investments Middle East Limited",
-        "Xanara ME LTD",
-        "SS&C Financial Services Middle East Limited",
-        "Perella Weinberg Partners UK LLP - branch",
-        "Mubadala (Re)insurance Limited",
-        "Bitmena Limited",
-        "Bank Lombard Odier & Co. Limited",
-        "AT Capital Markets Limited (Withdrawn)",
-        "Worldwide Cash Express Limited",
-        "BNP Paribas S.A.",
-        "Shorooq Partners Ltd",
-        "UniCredit S.p.A.",
-    ]:
-        # Convert to lowercase
-        company_name = company_name.lower()
+    # Handle special cases using the dictionary
+    if company_name in COMPANY_NAME_SPECIAL_CASES:
+        return COMPANY_NAME_SPECIAL_CASES[company_name]
+    
+    # General case formatting
 
-        company_name = company_name.replace("&", " and ")  # Replace '&' with 'and'
-        company_name = company_name.replace(".", "-")  # Replace periods with hyphens
+    # Convert to lowercase
+    company_name = company_name.lower()
 
-        # Replace non-alphanumeric characters (except spaces) with empty string
-        company_name = re.sub(r"[^\w\s-]", "", company_name)
+    company_name = company_name.replace("&", " and ")  # Replace '&' with 'and'
+    company_name = company_name.replace(".", "-")  # Replace periods with hyphens
 
-        # Replace spaces with hyphens
-        formatted_name = company_name.replace(" ", "-")
+    # Replace non-alphanumeric characters (except spaces) with empty string
+    company_name = re.sub(r"[^\w\s-]", "", company_name)
 
-        # Replace multiple spaces or hyphens with a single hyphen
-        company_name = re.sub(r"[\s-]+", "-", company_name)
+    # Replace spaces with hyphens
+    formatted_name = company_name.replace(" ", "-")
 
-        company_name = company_name.rstrip("-")  # Remove trailing hyphens
+    # Replace multiple spaces or hyphens with a single hyphen
+    company_name = re.sub(r"[\s-]+", "-", company_name)
+    
+    # Remove trailing hyphens
+    company_name = company_name.rstrip("-")  
 
-        return company_name
-
-    # Special Cases
-
-    if company_name == "Abrdn Investments Middle East Limited":
-        return "aberdeen-asset-middle-east-limited"
-
-    if company_name == "Xanara ME LTD":
-        return "xanara-management-limited"
-
-    if company_name == "SS&C Financial Services Middle East Limited":
-        return "ssandc-financial-services-middle-east-limited"
-
-    if company_name == "Perella Weinberg Partners UK LLP - branch":
-        return "perella-weinberg-partners-uk-llp"
-
-    if company_name == "Mubadala (Re)insurance Limited":
-        return "mubadala-re-insurance-limited"
-
-    if company_name == "Bitmena Limited":
-        return "venomex-limited"
-
-    if company_name == "Bank Lombard Odier & Co. Limited":
-        return "bank-lombard-odier--co-limited"
-
-    if company_name == "AT Capital Markets Limited (Withdrawn)":
-        return "at-capital-markets-limited"
-
-    if company_name == "Worldwide Cash Express Limited":
-        return "worldwide-cash-express"
-
-    if company_name == "BNP Paribas S.A.":
-        return "bnp-paribas-sa"
-
-    if company_name == "Shorooq Partners Ltd":
-        return "shorooq-vc-partners-ltd"
-
-    if company_name == "UniCredit S.p.A.":
-        return "unicredit-spa"
+    return company_name
 
 
 def create_session() -> requests.Session:
