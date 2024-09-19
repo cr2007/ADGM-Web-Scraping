@@ -286,10 +286,12 @@ def main(company_names: list[str], output_file: str) -> None:
             else:
                 print("NTFY_URL not configured in environment variables. Include a URL to get notifications.\nMore Info: https://ntfy.sh")
     except Exception as e:
+        df.to_csv(f"partial_{output_file}", index=False)
+
         if ntfy_url:
             requests.post(
                 ntfy_url,
-                data=f"App crashed\n\nAn error occurred during data extraction:\n {e}",
+                data=f"App crashed\nPartial results saved to partial_{output_file}\n\nAn error occurred during data extraction:\n {e}",
                 headers={
                     "Title": "ADGM Register data extraction failed",
                     "Priority": "5",
