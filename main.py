@@ -42,13 +42,10 @@ def format_company_name(company_name: str) -> str:
     company_name = company_name.lower()
 
     company_name = company_name.replace("&", " and ")  # Replace '&' with 'and'
-    company_name = company_name.replace(".", "-")  # Replace periods with hyphens
+    company_name = company_name.replace(".", "-")      # Replace periods with hyphens
 
     # Replace non-alphanumeric characters (except spaces) with empty string
     company_name = re.sub(r"[^\w\s-]", "", company_name)
-
-    # Replace spaces with hyphens
-    formatted_name = company_name.replace(" ", "-")
 
     # Replace multiple spaces or hyphens with a single hyphen
     company_name = re.sub(r"[\s-]+", "-", company_name)
@@ -82,11 +79,11 @@ def is_date(string) -> bool:
 
 
 def get_regulated_activities(soup: BeautifulSoup) -> list[dict[str, str]]:
-    regulated_activities: BeautifulSoup = soup.find(id="raTableContainer_fsfdetail")
+    regulated_activities = soup.find(id="raTableContainer_fsfdetail")
 
     ra_list = []
 
-    elements = regulated_activities.find_all("div", class_="opn-accord")
+    elements: BeautifulSoup = regulated_activities.find_all("div", class_="opn-accord")
     for element in elements:
         text = (
             element.get_text().strip().split("\n")
