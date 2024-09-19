@@ -82,9 +82,7 @@ def get_regulated_activities(soup: BeautifulSoup) -> list[dict[str, str]]:
 
     elements: BeautifulSoup = regulated_activities.find_all("div", class_="opn-accord")
     for element in elements:
-        text = (
-            element.get_text().strip().split("\n")
-        )  # Strip and split based on new lines
+        text = element.get_text().strip().split("\n") # Strip and split based on new lines
 
         # Filter out any empty or whitespace strings from the list
         text = [item.strip() for item in text if item.strip()]
@@ -109,13 +107,11 @@ def get_regulated_activities(soup: BeautifulSoup) -> list[dict[str, str]]:
             i += 1  # Move to the next item
 
         # Create the dictionary and append it to the result
-        result.append(
-            {
-                "Regulated Activity": activity,
-                "Effective Date": effective_date,
-                "Withdrawn Date": withdrawn_date,
-            }
-        )
+        result.append({
+            "Regulated Activity": activity,
+            "Effective Date": effective_date,
+            "Withdrawn Date": withdrawn_date,
+        })
 
         i += 1  # Move to the next activity
 
@@ -146,9 +142,7 @@ def fetch_company_data(session: requests.Session, company: str) -> dict[str, str
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/jxl,image/webp,image/png,image/svg+xml,*/*;q=0.8",
     }
 
-    url = (
-        f"https://www.adgm.com/public-registers/fsra/fsf/{format_company_name(company)}"
-    )
+    url = (f"https://www.adgm.com/public-registers/fsra/fsf/{format_company_name(company)}")
 
     try:
         response = session.get(url, headers=headers, timeout=10)
@@ -170,9 +164,7 @@ def fetch_company_data(session: requests.Session, company: str) -> dict[str, str
                     },
                 )
             else:
-                print(
-                    "NTFY_URL not configured in environment variables. Include a URL to get notifications.\nMore Info: https://ntfy.sh"
-                )
+                print("NTFY_URL not configured in environment variables. Include a URL to get notifications.\nMore Info: https://ntfy.sh")
 
             return {"Company": company}
 
@@ -305,9 +297,7 @@ def main(company_names: list[str], output_file: str) -> None:
                 },
             )
         else:
-            print(
-                "NTFY_URL not configured in environment variables. Include a URL to get notifications.\nMore Info: https://ntfy.sh"
-            )
+            print("NTFY_URL not configured in environment variables. Include a URL to get notifications.\nMore Info: https://ntfy.sh")
 
         raise e
     finally:
@@ -322,9 +312,7 @@ if __name__ == "__main__":
                 # List comprehension to read and strip each line
                 company_names = [line.strip() for line in file]
         else:
-            print(
-                "File path not specified. Please specify it in the '.env' file with the variable 'COMPANY_NAMES_FILE_PATH'"
-            )
+            print("File path not specified. Please specify it in the '.env' file with the variable 'COMPANY_NAMES_FILE_PATH'")
             sys.exit()
     except FileNotFoundError:
         print(f"The file at {file_path} was not found.")
