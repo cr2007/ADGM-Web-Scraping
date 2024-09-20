@@ -1,3 +1,12 @@
+"""
+main.py - This module handles web scraping for company data and notifies users of incorrect links.
+
+This module contains functions for web scraping company data from the ADGM public register,
+formatting company names, creating requests sessions, parsing HTML, and handling the main
+scraping process. It also includes functionality for sending notifications about errors
+or completion status.
+"""
+
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
 import re
@@ -6,11 +15,12 @@ import sys
 import threading
 import time
 from typing import Optional
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, ParserRejectedMarkup
 from dotenv import load_dotenv
 import pandas as pd
 import requests
 from requests.adapters import HTTPAdapter
+from requests.exceptions import RequestException
 from urllib3.util.retry import Retry
 
 all_parsed_data = []
@@ -35,6 +45,17 @@ COMPANY_NAME_SPECIAL_CASES = {
 
 
 def send_ntfy_notification(message: str, headers: Optional[dict[str, str]]) -> None:
+    """
+    Send a notification using the ntfy service.
+
+    Args:
+        message (str): The message to be sent in the notification.
+        headers (Optional[Dict[str, str]]): Additional headers for the notification.
+
+    Returns:
+        None
+    """
+
     if ntfy_url:
         requests.post(
             ntfy_url,
@@ -50,6 +71,16 @@ def send_ntfy_notification(message: str, headers: Optional[dict[str, str]]) -> N
 
 
 def format_company_name(company_name: str) -> str:
+    """
+    Format a company name for use in URL construction.
+
+    Args:
+        company_name (str): The original company name.
+
+    Returns:
+        str: The formatted company name.
+    """
+
     # Handle special cases using the dictionary
     if company_name in COMPANY_NAME_SPECIAL_CASES:
         return COMPANY_NAME_SPECIAL_CASES[company_name]
@@ -75,6 +106,13 @@ def format_company_name(company_name: str) -> str:
 
 
 def create_session() -> requests.Session:
+    """
+    Create a requests Session with retry configuration.
+
+    Returns:
+        requests.Session: Configured session object.
+    """
+
     session = requests.Session()
 
     retries = Retry(total=5, backoff_factor=0.1, status_forcelist=[500, 502, 503, 504])
@@ -85,13 +123,32 @@ def create_session() -> requests.Session:
     return session
 
 
-def is_date(string) -> bool:
-    """Check if a string looks like a date in a common format."""
+def is_date(string: str) -> bool:
+    """
+    Check if a string looks like a date in a common format.
+
+    Args:
+        string (str): The string to check.
+
+    Returns:
+        bool: True if the string matches a common date format, False otherwise.
+    """
+
     date_pattern = r"\d{1,2} \w+ \d{4}"
     return re.match(date_pattern, string) is not None
 
 
 def get_regulated_activities(soup: BeautifulSoup) -> list[dict[str, str]]:
+    """
+    Extract regulated activities from the BeautifulSoup object.
+
+    Args:
+        soup (BeautifulSoup): Parsed HTML content.
+
+    Returns:
+        List[Dict[str, str]]: List of dictionaries containing regulated activity information.
+    """
+
     regulated_activities = soup.find(id="raTableContainer_fsfdetail")
 
     ra_list = []
@@ -137,6 +194,16 @@ def get_regulated_activities(soup: BeautifulSoup) -> list[dict[str, str]]:
 
 
 def get_conditions(soup: BeautifulSoup) -> str:
+    """
+    Extract conditions from the BeautifulSoup object.
+
+    Args:
+        soup (BeautifulSoup): Parsed HTML content.
+
+    Returns:
+        str: Extracted conditions.
+    """
+
     conditions = soup.find(class_="fsp-first-table specialinfo-table")
 
     conditions_list: list[str] = []
@@ -153,6 +220,17 @@ def get_conditions(soup: BeautifulSoup) -> str:
 
 
 def fetch_company_data(session: requests.Session, company: str) -> dict[str, str]:
+    """
+    Fetch and parse company data from the ADGM website.
+
+    Args:
+        session (requests.Session): Session object for making HTTP requests.
+        company (str): Name of the company to fetch data for.
+
+    Returns:
+        Dict[str, str]: Dictionary containing parsed company data.
+    """
+
     loop_start_time = time.time()
 
     headers = {
@@ -224,13 +302,24 @@ def fetch_company_data(session: requests.Session, company: str) -> dict[str, str
     return company_data
 
 
-def main(company_names: list[str], output_file: str) -> None:
+def main(companies: list[str], output_file: str) -> None:
+    """
+    Main function to orchestrate the web scraping process.
+
+    Args:
+        companies (List[str]): List of company names to scrape data for.
+        output_file (str): Name of the output CSV file.
+
+    Returns:
+        None
+    """
+
     session = create_session()
     df = pd.DataFrame()
     executor = ThreadPoolExecutor(max_workers=10)
     shutdown_event = threading.Event()
 
-    def signal_handler(signum, frame):
+    def signal_handler(*_):
         print("\nCtrl+C pressed. Shutting down gracefully...")
         shutdown_event.set()
         executor.shutdown(wait=False, cancel_futures=True)
@@ -241,92 +330,168 @@ def main(company_names: list[str], output_file: str) -> None:
         print("Starting data extraction...")
         start_time = time.time()
 
-        future_to_company = {}
-        for company in company_names:
-            if shutdown_event.is_set():
-                break
-            future = executor.submit(fetch_company_data, session, company)
-            future_to_company[future] = company
+        process_company_data(companies, session, executor, shutdown_event, df)
 
-        for future in as_completed(future_to_company):
-            if shutdown_event.is_set():
-                break
-
-            company_data = future.result()
-            try:
-                company_data = future.result()
-                if company_data:
-                    df = pd.concat(
-                        [df, pd.DataFrame([company_data])], ignore_index=True
-                    )
-            except Exception as exc:
-                print(f"{company_data["Company"]} generated an exception: {exc}")
-
-        if not shutdown_event.is_set():
-            df.to_csv(output_file, index=False)
-
-            total_time = time.time() - start_time
-            minutes, seconds = divmod(total_time, 60)
-
-            print(f"Data extraction completed in {int(minutes)} min {seconds:.2f} sec")
-
-            send_ntfy_notification(
-                message=f"Job completed in {int(minutes)} minutes {seconds:.2f} seconds.",
-                headers={
-                    "Title": "ADGM Register data extraction successful",
-                    "Priority": "4",
-                    "Tags": "white_check_mark,muscle,adgm-register",
-                },
-            )
+        if shutdown_event.is_set():
+            save_results(df, output_file, start_time)
         else:
-            print("Data extraction was interrupted. Saving partial results...")
-
-            df.to_csv(f"partial_{output_file}", index=False)
-
-            print(f"Partial results saved to partial_{output_file}")
-
-            send_ntfy_notification(
-                message=f"Job was interrupted. Partial results saved to partial_{output_file}",
-                headers={
-                    "Title": "ADGM Register data extraction interrupted",
-                    "Priority": "3",
-                    "Tags": "negative_squared_cross_mark,adgm-register,ctrl-c,interrupted",
-                },
-            )
+            save_partial_results(df, output_file)
+    except RequestException as e:
+        handle_extraction_error(df, output_file, f"Network error: {e}")
+    except ParserRejectedMarkup as e:
+        handle_extraction_error(df, output_file, f"HTML parsing error: {e}")
+    except pd.errors.EmptyDataError as e:
+        handle_extraction_error(df, output_file, f"DataFrame error: {e}")
+    except IOError as e:
+        handle_extraction_error(df, output_file, f"I/O error: {e}")
     except Exception as e:
-        df.to_csv(f"partial_{output_file}", index=False)
-
-        send_ntfy_notification(
-            message=(f"App crashed\nPartial results saved to partial_{output_file}\n\n"
-                     "An error occurred during data extraction:\n {e}"),
-            headers={
-                "Title": "ADGM Register data extraction failed",
-                "Priority": "5",
-                "Tags": "warning,adgm-register,error",
-            },
-        )
-
-        raise e
+        handle_extraction_error(df, output_file, f"Unexpected error: {e}")
+        raise
     finally:
         executor.shutdown(wait=True)
         print("All tasks have been completed or cancelled.")
 
 
+def process_company_data(companies: list[str], session: requests.Session,
+                         executor: ThreadPoolExecutor, shutdown_event: threading.Event,
+                         df: pd.DataFrame) -> None:
+    """
+    Process company data using multi-threading.
+
+    Args:
+        companies (List[str]): List of company names to process.
+        session (requests.Session): Session object for making HTTP requests.
+        executor (ThreadPoolExecutor): Executor for multi-threading.
+        shutdown_event (threading.Event): Event to signal shutdown.
+        df (pd.DataFrame): DataFrame to store results.
+
+    Returns:
+        None
+    """
+
+    future_to_company = {executor.submit(fetch_company_data, session, company): company
+                         for company in companies if not shutdown_event.is_set()}
+
+    for future in as_completed(future_to_company):
+        if shutdown_event.is_set():
+            break
+
+        try:
+            company_data = future.result()
+            if company_data:
+                df = pd.concat([df, pd.DataFrame([company_data])], ignore_index=True)
+        except requests.RequestException as exc:
+            print(f"{future_to_company[future]} generated a request exception: {exc}")
+        except ValueError as exc:
+            print(f"{future_to_company[future]} generated a value error: {exc}")
+        except KeyError as exc:
+            print(f"{future_to_company[future]} generated a key error: {exc}")
+
+
+def save_results(df: pd.DataFrame, output_file: str, start_time: float) -> None:
+    """
+    Save the results to a CSV file and send a notification.
+
+    Args:
+        df (pd.DataFrame): DataFrame containing the results.
+        output_file (str): Name of the output CSV file.
+        start_time (float): Start time of the data extraction process.
+
+    Returns:
+        None
+    """
+
+    df.to_csv(output_file, index=False)
+
+    total_time = time.time() - start_time
+    minutes, seconds = divmod(total_time, 60)
+
+    print(f"Data extraction completed in {int(minutes)} min {seconds:.2f} sec")
+
+    send_ntfy_notification(
+        message=f"Job completed in {int(minutes)} minutes {seconds:.2f} seconds.",
+        headers={
+            "Title": "ADGM Register data extraction successful",
+            "Priority": "4",
+            "Tags": "white_check_mark,muscle,adgm-register",
+        },
+    )
+
+
+def save_partial_results(df: pd.DataFrame, output_file: str) -> None:
+    """
+    Save partial results to a CSV file and send a notification.
+
+    Args:
+        df (pd.DataFrame): DataFrame containing the partial results.
+        output_file (str): Name of the output CSV file.
+
+    Returns:
+        None
+    """
+
+    print("Data extraction was interrupted. Saving partial results...")
+
+    partial_output_file = f"partial_{output_file}"
+    df.to_csv(partial_output_file, index=False)
+
+    print(f"Partial results saved to {partial_output_file}")
+
+    send_ntfy_notification(
+        message=f"Job was interrupted. Partial results saved to {partial_output_file}",
+        headers={
+            "Title": "ADGM Register data extraction interrupted",
+            "Priority": "3",
+            "Tags": "negative_squared_cross_mark,adgm-register,ctrl-c,interrupted",
+        },
+    )
+
+
+def handle_extraction_error(df: pd.DataFrame, output_file: str, error: Exception) -> None:
+    """
+    Handle errors during the extraction process, save partial results, and send a notification.
+
+    Args:
+        df (pd.DataFrame): DataFrame containing the partial results.
+        output_file (str): Name of the output CSV file.
+        error (Exception): The exception that occurred during extraction.
+
+    Returns:
+        None
+    """
+
+    partial_output_file = f"partial_{output_file}"
+    df.to_csv(partial_output_file, index=False)
+
+    send_ntfy_notification(
+        message=(f"App crashed\nPartial results saved to {partial_output_file}\n\n"
+                 f"An error occurred during data extraction:\n {error}"),
+        headers={
+            "Title": "ADGM Register data extraction failed",
+            "Priority": "5",
+            "Tags": "warning,adgm.fsra-register,error",
+        },
+    )
+
+
 if __name__ == "__main__":
+    file_path = os.getenv("COMPANY_NAMES_FILE_PATH")
+    if not file_path:
+        print(
+            "File path not specified. "
+            "Please specify it in the '.env' file with the variable 'COMPANY_NAMES_FILE_PATH'"
+        )
+        sys.exit()
+
     try:
-        if file_path := os.getenv("COMPANY_NAMES_FILE_PATH"):
-            with open(file_path, "r", encoding="utf-8") as file:
-                # List comprehension to read and strip each line
-                company_names = [line.strip() for line in file]
-        else:
-            print(
-                "File path not specified. "
-                "Please specify it in the '.env' file with the variable 'COMPANY_NAMES_FILE_PATH'"
-            )
-            sys.exit()
+        with open(file_path, "r", encoding="utf-8") as file:
+            # List comprehension to read and strip each line
+            company_names = [line.strip() for line in file]
     except FileNotFoundError:
         print(f"The file at {file_path} was not found.")
+        sys.exit()
     except IOError:
         print(f"An error occurred while reading the file at {file_path}.")
+        sys.exit()
 
     main(company_names, "adgm_public_register_data.csv")
