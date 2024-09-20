@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "adgm-web-scraping"
+version = "0.1.0"
+description = "Project for scraping data from the FSRA Public Register in ADGM"
+authors = ["CSK <73425927+cr2007@users.noreply.github.com>"]
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.12"
+beautifulsoup4 = "^4.12.3"
+pandas = "^2.2.2"
+python-dotenv = "^1.0.1"
+requests = "^2.32.3"
+
+[tool.poetry.group.dev.dependencies]
+pylint = "^3.2.7"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+
