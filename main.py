@@ -40,10 +40,12 @@ def send_ntfy_notification(message: str, headers: Optional[dict[str, str]]) -> N
             ntfy_url,
             data=message,
             headers=headers,
+            timeout=15
         )
     else:
         print(
-            "NTFY_URL not configured in environment variables. Include a URL to get notifications.\nMore Info: https://ntfy.sh"
+            "NTFY_URL not configured in environment variables. Include a URL to get notifications."
+            "More Info: https://ntfy.sh"
         )
 
 
@@ -155,7 +157,8 @@ def fetch_company_data(session: requests.Session, company: str) -> dict[str, str
 
     headers = {
         "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/jxl,image/webp,image/png,image/svg+xml,*/*;q=0.8",
+        "Accept": ("text/html,application/xhtml+xml,application/xml;"
+                   "q=0.9,image/avif,image/jxl,image/webp,image/png,image/svg+xml,*/*;q=0.8"),
     }
 
     url = (
@@ -167,16 +170,19 @@ def fetch_company_data(session: requests.Session, company: str) -> dict[str, str
         if response.status_code == 404:
             print(
                 f"There is a problem with the URL for {company}."
-                f"\n{format_company_name(company)} does not seem to be the correct URL for this company."
+                f"\n{format_company_name(company)} does not seem to"
+                " be the correct URL for this company."
             )
 
             send_ntfy_notification(
                 message=f"Got {response.status_code} for {company}",
                 headers={
-                    "Title": f"Incorrect link for {company}.\n\nCheck if the link ending is correct by any chance.",
+                    "Title": (f"Incorrect link for {company}.\n\n"
+                              "Check if the link ending is correct by any chance."),
                     "Priority": "urgent",
                     "Tags": "warning,adgm, fsra-register,incorrect-link,404-Error",
-                    "Actions": "view, Go to FSRA Public Register, https://www.adgm.com/public-registers/fsra",
+                    "Actions": ("view, Go to FSRA Public Register, "
+                                "https://www.adgm.com/public-registers/fsra"),
                 },
             )
 
@@ -254,7 +260,7 @@ def main(company_names: list[str], output_file: str) -> None:
                         [df, pd.DataFrame([company_data])], ignore_index=True
                     )
             except Exception as exc:
-                print(f"{company} generated an exception: {exc}")
+                print(f"{company_data["Company"]} generated an exception: {exc}")
 
         if not shutdown_event.is_set():
             df.to_csv(output_file, index=False)
@@ -291,7 +297,8 @@ def main(company_names: list[str], output_file: str) -> None:
         df.to_csv(f"partial_{output_file}", index=False)
 
         send_ntfy_notification(
-            message=f"App crashed\nPartial results saved to partial_{output_file}\n\nAn error occurred during data extraction:\n {e}",
+            message=(f"App crashed\nPartial results saved to partial_{output_file}\n\n"
+                     "An error occurred during data extraction:\n {e}"),
             headers={
                 "Title": "ADGM Register data extraction failed",
                 "Priority": "5",
@@ -313,7 +320,8 @@ if __name__ == "__main__":
                 company_names = [line.strip() for line in file]
         else:
             print(
-                "File path not specified. Please specify it in the '.env' file with the variable 'COMPANY_NAMES_FILE_PATH'"
+                "File path not specified. "
+                "Please specify it in the '.env' file with the variable 'COMPANY_NAMES_FILE_PATH'"
             )
             sys.exit()
     except FileNotFoundError:
